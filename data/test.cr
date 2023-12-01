@@ -1,1 +1,1 @@
-Hello
+let language = 'crust';

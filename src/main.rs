@@ -6,7 +6,7 @@ mod err {
     #[derive(Debug)]
     pub enum CrustErr {
         IoError(io::Error),
-        CoreError(crust::CrustCoreErr),
+        CoreError(crust::util::CrustCoreErr),
     }
     pub type CrustResult = Result<(), CrustErr>;
 
@@ -15,8 +15,8 @@ mod err {
             CrustErr::IoError(err)
         }
     }
-    impl From<crust::CrustCoreErr> for CrustErr {
-        fn from(err: crust::CrustCoreErr) -> CrustErr {
+    impl From<crust::util::CrustCoreErr> for CrustErr {
+        fn from(err: crust::util::CrustCoreErr) -> CrustErr {
             CrustErr::CoreError(err)
         }
     }

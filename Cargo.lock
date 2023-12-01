@@ -5,3 +5,10 @@ version = 3
 [[package]]
 name = "crust"
 version = "0.1.0"
+dependencies = [
+ "crust_grammar",
+]
+
+[[package]]
+name = "crust_grammar"
+version = "0.1.0"
