@@ -1,4 +1,5 @@
-use crust_grammar::token::{self, Token};
+use crust_grammar::token::Token;
+use std::str::FromStr;
 
 use crate::util::{CrustCoreErr, CrustCoreResult};
 
@@ -45,101 +46,97 @@ impl<'a> Scanner<'a> {
     fn scan_token(&mut self, errors: &mut Vec<CrustCoreErr>) {
         let char = self.advance();
         match char {
-            "(" => self.tokens.push(Token::LeftParen {
+            '(' => self.tokens.push(Token::LeftParen {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            ")" => self.tokens.push(Token::RightParen {
+            ')' => self.tokens.push(Token::RightParen {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "{" => self.tokens.push(Token::LeftBrace {
+            '{' => self.tokens.push(Token::LeftBrace {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "}" => self.tokens.push(Token::RightBrace {
+            '}' => self.tokens.push(Token::RightBrace {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "," => self.tokens.push(Token::Comma {
+            ',' => self.tokens.push(Token::Comma {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "." => self.tokens.push(Token::Dot {
+            '.' => self.tokens.push(Token::Dot {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "-" => self.tokens.push(Token::Minus {
+            '-' => self.tokens.push(Token::Minus {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "+" => self.tokens.push(Token::Plus {
+            '+' => self.tokens.push(Token::Plus {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            ";" => self.tokens.push(Token::Semicolon {
+            ';' => self.tokens.push(Token::Semicolon {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "*" => self.tokens.push(Token::Star {
+            '*' => self.tokens.push(Token::Star {
                 offset: self.current - 1,
                 line: self.line,
             }),
-            "!" => {
-                if self.advance_if("=") {
-                    self.tokens.push(Token::BangEqual {
-                        offset: self.current - 2,
-                        line: self.line,
-                    });
-                } else {
-                    self.tokens.push(Token::Bang {
-                        offset: self.current - 1,
-                        line: self.line,
-                    });
-                }
+            '!' if self.advance_if('=') => {
+                self.tokens.push(Token::BangEqual {
+                    offset: self.current - 2,
+                    line: self.line,
+                });
             }
-            "=" => {
-                if self.advance_if("=") {
-                    self.tokens.push(Token::EqualEqual {
-                        offset: self.current - 2,
-                        line: self.line,
-                    });
-                } else {
-                    self.tokens.push(Token::Equal {
-                        offset: self.current - 1,
-                        line: self.line,
-                    });
-                }
+            '!' => {
+                self.tokens.push(Token::Bang {
+                    offset: self.current - 1,
+                    line: self.line,
+                });
             }
-            "<" => {
-                if self.advance_if("=") {
-                    self.tokens.push(Token::LessEqual {
-                        offset: self.current - 2,
-                        line: self.line,
-                    });
-                } else {
-                    self.tokens.push(Token::Less {
-                        offset: self.current - 1,
-                        line: self.line,
-                    });
-                }
+            '=' if self.advance_if('=') => {
+                self.tokens.push(Token::EqualEqual {
+                    offset: self.current - 2,
+                    line: self.line,
+                });
             }
-            ">" => {
-                if self.advance_if("=") {
-                    self.tokens.push(Token::GreaterEqual {
-                        offset: self.current - 2,
-                        line: self.line,
-                    });
-                } else {
-                    self.tokens.push(Token::Greater {
-                        offset: self.current - 1,
-                        line: self.line,
-                    });
-                }
+            '=' => {
+                self.tokens.push(Token::Equal {
+                    offset: self.current - 1,
+                    line: self.line,
+                });
             }
-            "/" => {
-                if self.advance_if("/") {
-                    while self.peek() != "\n" && !self.is_at_end() {
+            '<' if self.advance_if('=') => {
+                self.tokens.push(Token::LessEqual {
+                    offset: self.current - 2,
+                    line: self.line,
+                });
+            }
+            '<' => {
+                self.tokens.push(Token::Less {
+                    offset: self.current - 1,
+                    line: self.line,
+                });
+            }
+            '>' if self.advance_if('=') => {
+                self.tokens.push(Token::GreaterEqual {
+                    offset: self.current - 2,
+                    line: self.line,
+                });
+            }
+            '>' => {
+                self.tokens.push(Token::Greater {
+                    offset: self.current - 1,
+                    line: self.line,
+                });
+            }
+            '/' => {
+                if self.advance_if('/') {
+                    while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                 } else {
@@ -149,9 +146,14 @@ impl<'a> Scanner<'a> {
                     });
                 }
             }
-            " " | "\t" | "\r" => {}
-            "\n" => self.line += 1,
-            "\"" => {
+            '0'..='9' => {
+                if let Err(e) = self.take_number_literal() {
+                    errors.push(e);
+                }
+            }
+            ' ' | '\t' | '\r' => {}
+            '\n' => self.line += 1,
+            '\"' => {
                 if let Err(e) = self.take_string_literal() {
                     errors.push(e);
                 }
@@ -167,12 +169,12 @@ impl<'a> Scanner<'a> {
         self.current >= self.source.len()
     }
 
-    fn advance(&mut self) -> &str {
+    fn advance(&mut self) -> char {
         self.current += 1;
         self.char_at(self.current - 1)
     }
 
-    fn advance_if(&mut self, pattern: &str) -> bool {
+    fn advance_if(&mut self, pattern: char) -> bool {
         if self.is_at_end() || self.char_at(self.current) != pattern {
             false
         } else {
@@ -181,21 +183,21 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn peek(&self) -> &str {
+    fn peek(&self) -> char {
         if self.is_at_end() {
-            "\0"
+            '\0'
         } else {
             self.char_at(self.current)
         }
     }
 
-    fn char_at(&self, index: usize) -> &str {
-        &self.source[index..index + 1]
+    fn char_at(&self, index: usize) -> char {
+        self.source[index..index + 1].chars().next().unwrap()
     }
 
-    fn take_string_literal(&mut self) -> CrustCoreResult<()> {
-        while self.peek() != "\"" && !self.is_at_end() {
-            if self.peek() == "\n" {
+    fn take_string_literal(&mut self) -> CrustCoreResult {
+        while self.peek() != '\"' && !self.is_at_end() {
+            if self.peek() == '\n' {
                 self.line += 1;
             }
             self.advance();
@@ -218,6 +220,58 @@ impl<'a> Scanner<'a> {
         });
 
         Ok(())
+    }
+
+    fn take_number_literal(&mut self) -> CrustCoreResult {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            self.advance();
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+
+        let literal = &self.source[self.start..self.current];
+        if literal.contains('.') {
+            if let Ok(val) = f32::from_str(literal) {
+                self.tokens.push(Token::Float {
+                    offset: self.start,
+                    length: self.current - self.start,
+                    line: self.line,
+                    value: val,
+                });
+            } else {
+                return Err(CrustCoreErr::Scan {
+                    line: self.line,
+                    message: "Invalid float value".to_string(),
+                });
+            }
+        } else if let Ok(val) = i32::from_str(literal) {
+            self.tokens.push(Token::Integer {
+                offset: self.start,
+                length: self.current - self.start,
+                line: self.line,
+                value: val,
+            });
+        } else {
+            return Err(CrustCoreErr::Scan {
+                line: self.line,
+                message: "Invalid integer value".to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            '\0'
+        } else {
+            self.char_at(self.current + 1)
+        }
     }
 }
 
@@ -321,6 +375,64 @@ mod tests {
             },
         ];
         let scanner = Scanner::new("(// this is ignored)\n)/");
+        let tokens = scanner.scan_tokens();
+
+        tokens
+            .unwrap()
+            .iter()
+            .zip(symbols)
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+    }
+
+    #[test]
+    fn scan_float_literal_with_access() {
+        let symbols = vec![
+            Token::LeftParen { offset: 0, line: 1 },
+            Token::Float {
+                line: 1,
+                offset: 1,
+                length: 3,
+                value: 1.3f32,
+            },
+            Token::Dot { line: 1, offset: 4 },
+            Token::RightParen { offset: 5, line: 1 },
+            Token::Integer {
+                line: 1,
+                offset: 6,
+                length: 2,
+                value: 25i32,
+            },
+            Token::Dot { line: 1, offset: 8 },
+        ];
+        let scanner = Scanner::new("(1.3.)25.");
+        let tokens = scanner.scan_tokens();
+
+        tokens
+            .unwrap()
+            .iter()
+            .zip(symbols)
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+    }
+
+    #[test]
+    fn scan_number_literal() {
+        let symbols = vec![
+            Token::LeftParen { offset: 0, line: 1 },
+            Token::Float {
+                line: 1,
+                offset: 1,
+                length: 3,
+                value: 1.3f32,
+            },
+            Token::RightParen { offset: 4, line: 1 },
+            Token::Integer {
+                line: 1,
+                offset: 5,
+                length: 2,
+                value: 25i32,
+            },
+        ];
+        let scanner = Scanner::new("(1.3)25");
         let tokens = scanner.scan_tokens();
 
         tokens

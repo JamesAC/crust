@@ -5,4 +5,4 @@ pub enum CrustCoreErr {
     Runtime,
 }
 
-pub type CrustCoreResult<T> = Result<T, CrustCoreErr>;
+pub type CrustCoreResult<T = ()> = Result<T, CrustCoreErr>;
