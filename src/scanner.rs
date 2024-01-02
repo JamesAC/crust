@@ -151,6 +151,11 @@ impl<'a> Scanner<'a> {
                     errors.push(e);
                 }
             }
+            'A'..='z' => {
+                if let Err(e) = self.take_identifier() {
+                    errors.push(e);
+                }
+            }
             ' ' | '\t' | '\r' => {}
             '\n' => self.line += 1,
             '\"' => {
@@ -272,6 +277,14 @@ impl<'a> Scanner<'a> {
         } else {
             self.char_at(self.current + 1)
         }
+    }
+
+    fn take_identifier(&mut self) -> CrustCoreResult<()> {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text = &self.source[self.start..self.current];
+        unimplemented!();
     }
 }
 

@@ -1,6 +1,12 @@
 pub mod token {
+    use std::str::FromStr;
 
-    #[derive(Debug, PartialEq)]
+    use strum::{EnumDiscriminants, EnumString};
+
+    #[derive(Debug, PartialEq, EnumDiscriminants)]
+    #[strum_discriminants(derive(EnumString))]
+    #[strum_discriminants(name(TokenType))]
+    #[strum_discriminants(strum(ascii_case_insensitive))]
     pub enum Token {
         // Symbols
         LeftParen {
@@ -188,5 +194,10 @@ pub mod token {
             line: usize,
             value: i32,
         },
+    }
+
+    pub fn is_keyword(text: &str) -> Option<TokenType> {
+        let a = TokenType::from_str(text);
+        unimplemented!();
     }
 }
