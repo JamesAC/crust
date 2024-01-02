@@ -1,6 +1,12 @@
 pub mod token {
+    use std::str::FromStr;
 
-    #[derive(Debug, PartialEq)]
+    use strum::{EnumDiscriminants, EnumString};
+
+    #[derive(Debug, PartialEq, EnumDiscriminants)]
+    #[strum_discriminants(derive(EnumString))]
+    #[strum_discriminants(name(TokenType))]
+    #[strum_discriminants(strum(ascii_case_insensitive))]
     pub enum Token {
         // Symbols
         LeftParen {
@@ -97,11 +103,12 @@ pub mod token {
             line: usize,
         },
 
-        // Keywords
         Eof {
             offset: usize,
             line: usize,
         },
+
+        // Keywords
         Class {
             offset: usize,
             line: usize,
@@ -188,5 +195,29 @@ pub mod token {
             line: usize,
             value: i32,
         },
+    }
+
+    pub fn try_as_keyword(text: &str, offset: usize, line: usize) -> Option<Token> {
+        match TokenType::from_str(text) {
+            Ok(token_type) => match token_type {
+                TokenType::Class => Some(Token::Class { offset, line }),
+                TokenType::If => Some(Token::If { offset, line }),
+                TokenType::Else => Some(Token::Else { offset, line }),
+                TokenType::True => Some(Token::True { offset, line }),
+                TokenType::False => Some(Token::False { offset, line }),
+                TokenType::Fn => Some(Token::Fn { offset, line }),
+                TokenType::For => Some(Token::For { offset, line }),
+                TokenType::Mut => Some(Token::Mut { offset, line }),
+                TokenType::While => Some(Token::While { offset, line }),
+                TokenType::Loop => Some(Token::Loop { offset, line }),
+                TokenType::Break => Some(Token::Break { offset, line }),
+                TokenType::Return => Some(Token::Return { offset, line }),
+                TokenType::This => Some(Token::This { offset, line }),
+                TokenType::Super => Some(Token::Super { offset, line }),
+                TokenType::Let => Some(Token::Let { offset, line }),
+                _ => None,
+            },
+            Err(_) => None,
+        }
     }
 }

@@ -1,4 +1,4 @@
-use crust_grammar::token::Token;
+use crust_grammar::token::{try_as_keyword, Token};
 use std::str::FromStr;
 
 use crate::util::{CrustCoreErr, CrustCoreResult};
@@ -151,6 +151,11 @@ impl<'a> Scanner<'a> {
                     errors.push(e);
                 }
             }
+            'A'..='z' => {
+                if let Err(e) = self.take_identifier() {
+                    errors.push(e);
+                }
+            }
             ' ' | '\t' | '\r' => {}
             '\n' => self.line += 1,
             '\"' => {
@@ -272,6 +277,25 @@ impl<'a> Scanner<'a> {
         } else {
             self.char_at(self.current + 1)
         }
+    }
+
+    fn take_identifier(&mut self) -> CrustCoreResult<()> {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text = &self.source[self.start..self.current];
+
+        if let Some(keyword) = try_as_keyword(text, self.start, self.line) {
+            self.tokens.push(keyword);
+        } else {
+            self.tokens.push(Token::Identifier {
+                offset: self.start,
+                length: self.current - self.start,
+                line: self.line,
+                value: text.to_string(),
+            })
+        }
+        Ok(())
     }
 }
 
@@ -458,6 +482,77 @@ mod tests {
             },
         ];
         let scanner = Scanner::new("(\"This is a string\")");
+        let tokens = scanner.scan_tokens();
+
+        tokens
+            .unwrap()
+            .iter()
+            .zip(symbols)
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+    }
+
+    #[test]
+    fn scan_identifiers() {
+        let symbols = vec![
+            Token::If { offset: 0, line: 1 },
+            Token::Else { offset: 3, line: 1 },
+            Token::For { offset: 8, line: 1 },
+            Token::Class {
+                offset: 12,
+                line: 1,
+            },
+            Token::Super {
+                offset: 18,
+                line: 1,
+            },
+            Token::Fn {
+                offset: 24,
+                line: 1,
+            },
+            Token::Identifier {
+                offset: 27,
+                line: 1,
+                length: 11,
+                value: "some_name_1".to_string(),
+            },
+            Token::True {
+                offset: 39,
+                line: 1,
+            },
+            Token::False {
+                offset: 44,
+                line: 1,
+            },
+            Token::Mut {
+                offset: 50,
+                line: 1,
+            },
+            Token::While {
+                offset: 54,
+                line: 1,
+            },
+            Token::Loop {
+                offset: 60,
+                line: 1,
+            },
+            Token::Break {
+                offset: 65,
+                line: 1,
+            },
+            Token::Return {
+                offset: 71,
+                line: 1,
+            },
+            Token::This {
+                offset: 78,
+                line: 1,
+            },
+            Token::Let {
+                offset: 83,
+                line: 1,
+            },
+        ];
+        let scanner = Scanner::new("if else for class super fn some_name_1 true false mut while loop break return this let");
         let tokens = scanner.scan_tokens();
 
         tokens
