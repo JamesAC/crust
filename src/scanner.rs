@@ -1,4 +1,4 @@
-use crust_grammar::token::{try_as_keyword, Token};
+use crust_grammar::token::{try_as_keyword, SourceToken, Token};
 use std::str::FromStr;
 
 use crate::util::{CrustCoreErr, CrustCoreResult};
@@ -10,7 +10,7 @@ pub struct Scanner<'a> {
     current: usize,
     line: usize,
 
-    tokens: Vec<Token>,
+    tokens: Vec<SourceToken>,
 }
 
 impl<'a> Scanner<'a> {
@@ -24,17 +24,15 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(mut self) -> CrustCoreResult<Vec<Token>> {
+    pub fn scan_tokens(mut self) -> CrustCoreResult<Vec<SourceToken>> {
         let mut errors: Vec<CrustCoreErr> = vec![];
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token(&mut errors);
         }
 
-        self.tokens.push(Token::Eof {
-            offset: self.current,
-            line: self.line,
-        });
+        self.tokens
+            .push(SourceToken::new(Token::Eof, self.current, self.line, 0));
 
         if !errors.is_empty() {
             Err(CrustCoreErr::Multi { errors })
@@ -46,93 +44,39 @@ impl<'a> Scanner<'a> {
     fn scan_token(&mut self, errors: &mut Vec<CrustCoreErr>) {
         let char = self.advance();
         match char {
-            '(' => self.tokens.push(Token::LeftParen {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            ')' => self.tokens.push(Token::RightParen {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '{' => self.tokens.push(Token::LeftBrace {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '}' => self.tokens.push(Token::RightBrace {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            ',' => self.tokens.push(Token::Comma {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '.' => self.tokens.push(Token::Dot {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '-' => self.tokens.push(Token::Minus {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '+' => self.tokens.push(Token::Plus {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            ';' => self.tokens.push(Token::Semicolon {
-                offset: self.current - 1,
-                line: self.line,
-            }),
-            '*' => self.tokens.push(Token::Star {
-                offset: self.current - 1,
-                line: self.line,
-            }),
+            '(' => self.push_token(Token::LeftParen),
+            ')' => self.push_token(Token::RightParen),
+            '{' => self.push_token(Token::LeftBrace),
+            '}' => self.push_token(Token::RightBrace),
+            ',' => self.push_token(Token::Comma),
+            '.' => self.push_token(Token::Dot),
+            '-' => self.push_token(Token::Minus),
+            '+' => self.push_token(Token::Plus),
+            ';' => self.push_token(Token::Semicolon),
+            '*' => self.push_token(Token::Star),
             '!' if self.advance_if('=') => {
-                self.tokens.push(Token::BangEqual {
-                    offset: self.current - 2,
-                    line: self.line,
-                });
+                self.push_token(Token::BangEqual);
             }
             '!' => {
-                self.tokens.push(Token::Bang {
-                    offset: self.current - 1,
-                    line: self.line,
-                });
+                self.push_token(Token::Bang);
             }
             '=' if self.advance_if('=') => {
-                self.tokens.push(Token::EqualEqual {
-                    offset: self.current - 2,
-                    line: self.line,
-                });
+                self.push_token(Token::EqualEqual);
             }
             '=' => {
-                self.tokens.push(Token::Equal {
-                    offset: self.current - 1,
-                    line: self.line,
-                });
+                self.push_token(Token::Equal);
             }
             '<' if self.advance_if('=') => {
-                self.tokens.push(Token::LessEqual {
-                    offset: self.current - 2,
-                    line: self.line,
-                });
+                self.push_token(Token::LessEqual);
             }
             '<' => {
-                self.tokens.push(Token::Less {
-                    offset: self.current - 1,
-                    line: self.line,
-                });
+                self.push_token(Token::Less);
             }
             '>' if self.advance_if('=') => {
-                self.tokens.push(Token::GreaterEqual {
-                    offset: self.current - 2,
-                    line: self.line,
-                });
+                self.push_token(Token::GreaterEqual);
             }
             '>' => {
-                self.tokens.push(Token::Greater {
-                    offset: self.current - 1,
-                    line: self.line,
-                });
+                self.push_token(Token::Greater);
             }
             '/' => {
                 if self.advance_if('/') {
@@ -140,10 +84,7 @@ impl<'a> Scanner<'a> {
                         self.advance();
                     }
                 } else {
-                    self.tokens.push(Token::Slash {
-                        offset: self.current - 1,
-                        line: self.line,
-                    });
+                    self.push_token(Token::Slash);
                 }
             }
             '0'..='9' => {
@@ -168,6 +109,15 @@ impl<'a> Scanner<'a> {
                 message: "Unexpected character".to_string(),
             }),
         }
+    }
+
+    fn push_token(&mut self, token: Token) {
+        self.tokens.push(SourceToken::new(
+            token,
+            self.start,
+            self.line,
+            self.current - self.start,
+        ))
     }
 
     fn is_at_end(&self) -> bool {
@@ -217,12 +167,9 @@ impl<'a> Scanner<'a> {
 
         self.advance();
 
-        self.tokens.push(Token::String {
-            offset: self.start,
-            length: self.current - self.start,
-            line: self.line,
-            value: self.source[self.start + 1..self.current - 1].to_string(),
-        });
+        self.push_token(Token::String(
+            self.source[self.start + 1..self.current - 1].to_string(),
+        ));
 
         Ok(())
     }
@@ -242,12 +189,7 @@ impl<'a> Scanner<'a> {
         let literal = &self.source[self.start..self.current];
         if literal.contains('.') {
             if let Ok(val) = f32::from_str(literal) {
-                self.tokens.push(Token::Float {
-                    offset: self.start,
-                    length: self.current - self.start,
-                    line: self.line,
-                    value: val,
-                });
+                self.push_token(Token::Float(val));
             } else {
                 return Err(CrustCoreErr::Scan {
                     line: self.line,
@@ -255,12 +197,7 @@ impl<'a> Scanner<'a> {
                 });
             }
         } else if let Ok(val) = i32::from_str(literal) {
-            self.tokens.push(Token::Integer {
-                offset: self.start,
-                length: self.current - self.start,
-                line: self.line,
-                value: val,
-            });
+            self.push_token(Token::Integer(val));
         } else {
             return Err(CrustCoreErr::Scan {
                 line: self.line,
@@ -285,15 +222,10 @@ impl<'a> Scanner<'a> {
         }
         let text = &self.source[self.start..self.current];
 
-        if let Some(keyword) = try_as_keyword(text, self.start, self.line) {
-            self.tokens.push(keyword);
+        if let Some(keyword) = try_as_keyword(text) {
+            self.push_token(keyword);
         } else {
-            self.tokens.push(Token::Identifier {
-                offset: self.start,
-                length: self.current - self.start,
-                line: self.line,
-                value: text.to_string(),
-            })
+            self.push_token(Token::Identifier(text.to_string()));
         }
         Ok(())
     }
@@ -306,16 +238,16 @@ mod tests {
     #[test]
     fn scan_basic_symbols() {
         let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::RightParen { offset: 1, line: 1 },
-            Token::LeftBrace { offset: 2, line: 1 },
-            Token::RightBrace { offset: 3, line: 1 },
-            Token::Comma { offset: 4, line: 1 },
-            Token::Dot { offset: 5, line: 1 },
-            Token::Minus { offset: 6, line: 1 },
-            Token::Plus { offset: 7, line: 1 },
-            Token::Semicolon { offset: 8, line: 1 },
-            Token::Star { offset: 9, line: 1 },
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftBrace,
+            Token::RightBrace,
+            Token::Comma,
+            Token::Dot,
+            Token::Minus,
+            Token::Plus,
+            Token::Semicolon,
+            Token::Star,
         ];
         let scanner = Scanner::new("(){},.-+;*");
         let tokens = scanner.scan_tokens();
@@ -323,6 +255,7 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
             .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
@@ -330,17 +263,14 @@ mod tests {
     #[test]
     fn scan_two_char_symbols() {
         let symbols = vec![
-            Token::EqualEqual { offset: 0, line: 1 },
-            Token::BangEqual { offset: 2, line: 1 },
-            Token::Equal { offset: 4, line: 1 },
-            Token::Bang { offset: 5, line: 1 },
-            Token::LessEqual { offset: 6, line: 1 },
-            Token::Less { offset: 8, line: 1 },
-            Token::GreaterEqual { offset: 9, line: 1 },
-            Token::Greater {
-                offset: 11,
-                line: 1,
-            },
+            Token::EqualEqual,
+            Token::BangEqual,
+            Token::Equal,
+            Token::Bang,
+            Token::LessEqual,
+            Token::Less,
+            Token::GreaterEqual,
+            Token::Greater,
         ];
         let scanner = Scanner::new("==!==!<=<>=>");
         let tokens = scanner.scan_tokens();
@@ -348,6 +278,7 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
             .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
@@ -355,25 +286,16 @@ mod tests {
     #[test]
     fn scan_whitespace() {
         let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::RightParen { offset: 1, line: 1 },
-            Token::LeftBrace { offset: 3, line: 1 },
-            Token::RightBrace { offset: 4, line: 1 },
-            Token::Comma { offset: 6, line: 2 },
-            Token::Dot { offset: 7, line: 2 },
-            Token::Minus { offset: 8, line: 2 },
-            Token::Plus {
-                offset: 10,
-                line: 2,
-            },
-            Token::Semicolon {
-                offset: 11,
-                line: 2,
-            },
-            Token::Star {
-                offset: 12,
-                line: 2,
-            },
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftBrace,
+            Token::RightBrace,
+            Token::Comma,
+            Token::Dot,
+            Token::Minus,
+            Token::Plus,
+            Token::Semicolon,
+            Token::Star,
         ];
         let scanner = Scanner::new("() {}\n,.-\t+;*");
         let tokens = scanner.scan_tokens();
@@ -381,52 +303,34 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
             .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 
     #[test]
     fn scan_comment() {
-        let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::RightParen {
-                offset: 21,
-                line: 2,
-            },
-            Token::Slash {
-                offset: 22,
-                line: 2,
-            },
-        ];
+        let symbols = vec![Token::LeftParen, Token::RightParen, Token::Slash];
         let scanner = Scanner::new("(// this is ignored)\n)/");
         let tokens = scanner.scan_tokens();
 
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
-            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 
     #[test]
     fn scan_float_literal_with_access() {
         let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::Float {
-                line: 1,
-                offset: 1,
-                length: 3,
-                value: 1.3f32,
-            },
-            Token::Dot { line: 1, offset: 4 },
-            Token::RightParen { offset: 5, line: 1 },
-            Token::Integer {
-                line: 1,
-                offset: 6,
-                length: 2,
-                value: 25i32,
-            },
-            Token::Dot { line: 1, offset: 8 },
+            Token::LeftParen,
+            Token::Float(1.3),
+            Token::Dot,
+            Token::RightParen,
+            Token::Integer(25),
+            Token::Dot,
         ];
         let scanner = Scanner::new("(1.3.)25.");
         let tokens = scanner.scan_tokens();
@@ -434,27 +338,18 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
-            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 
     #[test]
     fn scan_number_literal() {
         let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::Float {
-                line: 1,
-                offset: 1,
-                length: 3,
-                value: 1.3f32,
-            },
-            Token::RightParen { offset: 4, line: 1 },
-            Token::Integer {
-                line: 1,
-                offset: 5,
-                length: 2,
-                value: 25i32,
-            },
+            Token::LeftParen,
+            Token::Float(1.3),
+            Token::RightParen,
+            Token::Integer(25),
         ];
         let scanner = Scanner::new("(1.3)25");
         let tokens = scanner.scan_tokens();
@@ -462,24 +357,17 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
-            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 
     #[test]
     fn scan_string_literal() {
         let symbols = vec![
-            Token::LeftParen { offset: 0, line: 1 },
-            Token::String {
-                line: 1,
-                offset: 1,
-                length: 18,
-                value: "This is a string".to_string(),
-            },
-            Token::RightParen {
-                offset: 19,
-                line: 1,
-            },
+            SourceToken::new(Token::LeftParen, 0, 1, 1),
+            SourceToken::new(Token::String("This is a string".to_string()), 1, 1, 18),
+            SourceToken::new(Token::RightParen, 19, 1, 1),
         ];
         let scanner = Scanner::new("(\"This is a string\")");
         let tokens = scanner.scan_tokens();
@@ -488,69 +376,28 @@ mod tests {
             .unwrap()
             .iter()
             .zip(symbols)
-            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 
     #[test]
     fn scan_identifiers() {
         let symbols = vec![
-            Token::If { offset: 0, line: 1 },
-            Token::Else { offset: 3, line: 1 },
-            Token::For { offset: 8, line: 1 },
-            Token::Class {
-                offset: 12,
-                line: 1,
-            },
-            Token::Super {
-                offset: 18,
-                line: 1,
-            },
-            Token::Fn {
-                offset: 24,
-                line: 1,
-            },
-            Token::Identifier {
-                offset: 27,
-                line: 1,
-                length: 11,
-                value: "some_name_1".to_string(),
-            },
-            Token::True {
-                offset: 39,
-                line: 1,
-            },
-            Token::False {
-                offset: 44,
-                line: 1,
-            },
-            Token::Mut {
-                offset: 50,
-                line: 1,
-            },
-            Token::While {
-                offset: 54,
-                line: 1,
-            },
-            Token::Loop {
-                offset: 60,
-                line: 1,
-            },
-            Token::Break {
-                offset: 65,
-                line: 1,
-            },
-            Token::Return {
-                offset: 71,
-                line: 1,
-            },
-            Token::This {
-                offset: 78,
-                line: 1,
-            },
-            Token::Let {
-                offset: 83,
-                line: 1,
-            },
+            Token::If,
+            Token::Else,
+            Token::For,
+            Token::Class,
+            Token::Super,
+            Token::Fn,
+            Token::Identifier("some_name_1".to_string()),
+            Token::True,
+            Token::False,
+            Token::Mut,
+            Token::While,
+            Token::Loop,
+            Token::Break,
+            Token::Return,
+            Token::This,
+            Token::Let,
         ];
         let scanner = Scanner::new("if else for class super fn some_name_1 true false mut while loop break return this let");
         let tokens = scanner.scan_tokens();
@@ -558,7 +405,8 @@ mod tests {
         tokens
             .unwrap()
             .iter()
+            .map(|st| &st.token)
             .zip(symbols)
-            .for_each(|(token, symbol)| assert_eq!(*token, symbol));
+            .for_each(|(token, symbol)| assert_eq!(*token, symbol))
     }
 }
