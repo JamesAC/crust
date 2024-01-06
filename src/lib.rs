@@ -2,6 +2,7 @@ use util::CrustCoreResult;
 
 use crate::scanner::Scanner;
 
+mod ast;
 mod scanner;
 pub mod util;
 
